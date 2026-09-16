@@ -1,0 +1,10 @@
+@import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800;900&family=DM+Sans:wght@400;450;500;550;600;650;700&family=DM+Serif+Display:ital@0;1&family=Caveat:wght@600;700&display=swap');
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+@layer base {
+ :root {--background:42 50% 94%;--foreground:65 9% 13%;--card:42 50% 94%;--card-foreground:65 9% 13%;--popover:42 50% 94%;--popover-foreground:65 9% 13%;--primary:65 9% 13%;--primary-foreground:42 50% 94%;--secondary:40 25% 87%;--secondary-foreground:65 9% 13%;--muted:40 25% 87%;--muted-foreground:65 5% 40%;--accent:40 25% 87%;--accent-foreground:65 9% 13%;--destructive:10 83% 48%;--destructive-foreground:0 0% 100%;--border:42 16% 80%;--input:42 16% 80%;--ring:11 84% 54%;--radius:0rem;}
+ * {@apply border-border;}
+ body {margin:0;-webkit-font-smoothing:antialiased;}
+ [data-debug-wrapper="true"]{display:contents!important;}
+}
