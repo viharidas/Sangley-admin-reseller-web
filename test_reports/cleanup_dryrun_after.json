@@ -1,0 +1,30 @@
+{
+  "mode": "dry-run",
+  "records": {
+    "payouts": [],
+    "commission_adjustments": [],
+    "commissions": [],
+    "customer_ownership": [],
+    "orders": [],
+    "commission_rules": [],
+    "referral_events": [],
+    "referral_sessions": [],
+    "portal_notifications": [],
+    "marketing_assets": [],
+    "portal_files": []
+  },
+  "counts": {
+    "payouts": 0,
+    "commission_adjustments": 0,
+    "commissions": 0,
+    "customer_ownership": 0,
+    "orders": 0,
+    "commission_rules": 0,
+    "referral_events": 0,
+    "referral_sessions": 0,
+    "portal_notifications": 0,
+    "marketing_assets": 0,
+    "portal_files": 0
+  },
+  "preserved": "Unrelated records, authentication, original audit logs and stored objects"
+}

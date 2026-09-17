@@ -1,4 +1,4 @@
-"""Archive only QA_ITER4/5/6 reliability fixtures. Dry run unless --apply is supplied.
+"""Archive only QA_ITER4/5/6/7 reliability fixtures. Dry run unless --apply is supplied.
 
 Historical audit logs and all unrelated records are retained. Uploaded objects are
 not destroyed: flagged QA file metadata is soft-deleted to revoke app access.
@@ -16,8 +16,8 @@ from bson.json_util import dumps
 import os
 
 load_dotenv(Path(__file__).resolve().parents[1] / '.env')
-QA = re.compile(r'^QA[ _]ITER[456](?:_| |$)', re.IGNORECASE)
-SOURCE = re.compile(r'^pytest_iter[456]$', re.IGNORECASE)
+QA = re.compile(r'^QA[ _]ITER[4567](?:_| |$)', re.IGNORECASE)
+SOURCE = re.compile(r'^pytest_iter[4567]$', re.IGNORECASE)
 
 
 def plan_cleanup(db):
@@ -97,7 +97,7 @@ def apply_cleanup(db, plan):
         for doc in docs:
             archive.update_one({'_id': collection + ':' + doc['id']}, {'$setOnInsert': {
                 'collection': collection, 'original': doc, 'archived_at': stamp,
-                'reason': 'User-approved QA_ITER4/5/6 reliability fixture cleanup',
+                'reason': 'User-approved QA_ITER4/5/6/7 reliability fixture cleanup',
             }}, upsert=True)
     result = {}
     for collection, docs in plan.items():

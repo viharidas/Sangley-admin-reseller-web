@@ -249,38 +249,40 @@ class TestIter6MetricsReconciliation:
             assert snap["other_cost_minor"] == 1, snap
             assert snap["estimated_gross_profit_minor"] == 29800 - 200 - 2980 - 1
 
-            # 6) Reproduce metrics.sales() product allocation for THIS order.
-            parts = snap["parts"]
-            total_commission = c["amount_minor"]
-            original = sum((x.get("commission_minor") or 0) for x in parts)
-            allocated = 0
-            product_profits = []
-            for idx, part in enumerate(parts):
-                share = round(total_commission * (part.get("commission_minor") or 0) / original) if original else 0
-                actual_commission = total_commission - allocated if idx == len(parts) - 1 else share
-                allocated += actual_commission
-                other_share = round(snap["other_cost_minor"] * part["sales_minor"] / max(snap["sales_minor"], 1))
-                pprofit = part["sales_minor"] - part["cost_minor"] - actual_commission - other_share
-                product_profits.append(pprofit)
+            # 6) Invoke the REAL metrics.sales() (not a copied formula) restricted
+            # to this order via monkeypatched sale_query. This exercises the
+            # application code exactly as the /sales endpoint would.
+            from portal import metrics as _metrics
+            _orig_sale_query = _metrics.sale_query
+            try:
+                _metrics.sale_query = lambda rid=None, **k: {"id": oid}
+                result = _run(_metrics.sales())
+            finally:
+                _metrics.sale_query = _orig_sale_query
 
+            product_profits = [p["profit_minor"] for p in result["products"]]
             summed = sum(product_profits)
             order_profit = snap["estimated_gross_profit_minor"]
             print(f"[iter6] order={oid} product_profits={product_profits} "
-                  f"sum={summed} order_profit={order_profit} diff={summed-order_profit}")
+                  f"sum={summed} order_profit={order_profit} "
+                  f"report_profit={result['profit_minor']} "
+                  f"diff={summed-order_profit}")
 
-            # Each product profit must not be None
+            # Each product profit must be non-null
             assert all(p is not None for p in product_profits), product_profits
 
-            # ---- KEY ASSERTION (expected to FAIL until metrics.py:59 is fixed) ----
+            # ---- KEY ASSERTION against the ACTUAL metrics.sales() output ----
             # Product-level allocation must reconcile exactly to the order snapshot.
             assert summed == order_profit, (
-                f"metrics.py per-product profit allocation drift: "
+                f"metrics.sales() per-product profit allocation drift: "
                 f"sum(products.profit_minor)={summed} but "
                 f"snapshot.estimated_gross_profit_minor={order_profit} "
-                f"(diff={summed-order_profit} paise). "
-                f"Fix: add a residual absorber to the last part for other_cost_minor split, "
-                f"mirroring the commission allocation pattern already used."
+                f"(diff={summed-order_profit} paise)."
             )
+            # Report-level totals reconcile as well
+            assert result["profit_minor"] == order_profit
+            assert result["commission_minor"] == c["amount_minor"]
+            assert result["sales_minor"] == snap["sales_minor"]
         finally:
             # Deactivate the rule (supersede with active=False)
             get = admin.get(f"{base_url}/api/admin/business/commission-rules",

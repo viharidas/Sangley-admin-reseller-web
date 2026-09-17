@@ -140,3 +140,7 @@ agent_communication:
   - agent: main
     message: "Iteration 6 reproduced the 1-paise cost allocation gap. Fixed metrics.sales with Decimal cumulative cost allocation: all parts sum exactly, including tiny costs and multi-line orders. UI validation passed in browser; do not repeat those UI tests. Added dry-run-first cleanup_qa_reliability.py: archive QA_ITER4/5/6 originals in Mongo before bounded deletion; preserve unrelated data, all audit logs, uploaded objects; QA file metadata soft deleted. Final testing must invoke actual metrics.sales, NOT a copied formula (iter6 test currently duplicates the old implementation and must be corrected)."
 
+
+  - agent: main
+    message: "Reliability closure verified: iteration7 reports 19/19 serial backend regressions and 11/11 post-cleanup API checks. Iteration6 browser order/payout required-field and success paths passed. Actual metrics.sales invoked, not duplicated formula. QA_ITER4/5/6/7 cleanup completed with 489 durable archived originals; dry-run now zero; older QA_PORTAL fixtures and 88 unlinked/older notifications retained deliberately, all original audit history preserved. No auth credentials or external providers changed."
+

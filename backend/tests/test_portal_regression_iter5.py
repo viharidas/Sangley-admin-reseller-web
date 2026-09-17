@@ -22,21 +22,28 @@ import requests
 from motor.motor_asyncio import AsyncIOMotorClient
 
 
-MONGO_URL = os.environ.get("MONGO_URL", "mongodb://localhost:27017")
-DB_NAME = os.environ.get("DB_NAME", "test_database")
+MONGO_URL = os.environ.get("MONGO_URL")
+DB_NAME = os.environ.get("DB_NAME")
+if not MONGO_URL or not DB_NAME:
+    pytest.skip("MONGO_URL and DB_NAME must be set in backend/.env",
+                allow_module_level=True)
 
-RESELLER_A = {
-    "email": "qa_portal_a_98204811@example.com",
-    "password": "QA_PORTAL_A_98204811123",
-    "reseller_id": "9b9ecb49-5c1a-463c-91cb-452e18622815",
-    "referral_code": "SNG40025330D4AB",
-}
-RESELLER_B = {
-    "email": "qa_portal_b_56c6f848@example.com",
-    "password": "QA_PORTAL_B_56c6f848123",
-    "reseller_id": "357245f0-1937-453c-9bfd-2168cb3361d2",
-    "referral_code": "SNG0E106BCFAF69",
-}
+
+def _load_reseller_profiles():
+    path = Path("/app/test_reports/portal_iter3_credentials.json")
+    if not path.exists():
+        pytest.skip("portal_iter3_credentials.json not found; run iter3 fixtures first",
+                    allow_module_level=True)
+    data = json.loads(path.read_text())
+    a = data["A"]; b = data["B"]
+    a.setdefault("reseller_id", "9b9ecb49-5c1a-463c-91cb-452e18622815")
+    a.setdefault("referral_code", "SNG40025330D4AB")
+    b.setdefault("reseller_id", "357245f0-1937-453c-9bfd-2168cb3361d2")
+    b.setdefault("referral_code", "SNG0E106BCFAF69")
+    return a, b
+
+
+RESELLER_A, RESELLER_B = _load_reseller_profiles()
 
 MANIFEST_PATH = Path("/app/test_reports/qa_iter5_manifest.json")
 
@@ -182,11 +189,7 @@ class TestIter5ReferralSecurity:
         assert order["order_channel"] == "D2C"
         assert order.get("reseller_id") is None
         assert order.get("referral_session_id") is None
-        # No commission
-        cid = _get_commission(_admin_login(base_url, {"email": os.environ.get("ADMIN_EMAIL", "admin@sangley.in"),
-                                                     "password": os.environ.get("ADMIN_PASSWORD", "")}) if False else None,
-                              base_url, "unused", oid, retries=1) if False else None
-        # direct DB assertion instead
+        # No commission (direct DB assertion)
         c = _run(mongo.commissions.find_one({"order_id": oid}, {"_id": 0}))
         assert c is None
 
@@ -442,15 +445,13 @@ class TestIter5FinanceDepth:
                                    headers=_origin(base_url), timeout=30)
                 assert r_adj.status_code == 404
         finally:
-            # Restore original settings snapshot atomically
+            # Restore original settings snapshot atomically (assert success)
             restore = {**old, "product_costs": {k: str(v) for k, v in old_costs.items()},
                        "other_cost_per_order": str(old_other) if old_other is not None else None,
                        "reason": "QA_ITER5 restore settings"}
             r2 = admin.put(f"{base_url}/api/admin/business/settings", json=restore,
                            headers=_origin(base_url), timeout=30)
-            # Best-effort restore; log if fails
-            if r2.status_code != 200:
-                print(f"WARN restore settings: {r2.status_code} {r2.text}")
+            assert r2.status_code == 200, f"restore settings failed: {r2.status_code} {r2.text}"
 
 
 class TestIter5AdminModalsBackend:
@@ -522,7 +523,32 @@ class TestIter5AdminModalsBackend:
     def test_payout_review_backend_required_fields(self, base_url, admin_credentials, manifest, mongo):
         products = _pick_products(base_url)
         admin = _admin_login(base_url, admin_credentials)
-        # Build a payable commission for B
+        # Build our own scoped rule so this test does not depend on baseline QA rules
+        rule_body = {
+            "name": f"QA_ITER5_PAYOUT_{uuid.uuid4().hex[:6]}",
+            "kind": "PERCENTAGE", "rate": "10",
+            "product_ids": [products[0]["id"]],
+            "variant_ids": [], "bundle_sizes": [], "tiers": [],
+            "reseller_ids": [RESELLER_B["reseller_id"]],
+            "priority": 500, "active": True,
+            "reason": "QA_ITER5 payout backend scoped rule",
+        }
+        r_rule = admin.post(f"{base_url}/api/admin/business/commission-rules",
+                            json=rule_body, headers=_origin(base_url), timeout=30)
+        assert r_rule.status_code == 200, r_rule.text
+        rule_id = r_rule.json()["id"]
+        manifest["rules"].append(rule_id)
+        # Ensure product cost so snapshot is fully configured
+        old_settings = _run(mongo.business_settings.find_one({"id": "portal"}, {"_id": 0}))
+        old_costs = old_settings.get("product_costs", {}) or {}
+        old_other = old_settings.get("other_cost_per_order")
+        new_costs = {**old_costs, products[0]["id"]: "1.00"}
+        put = admin.put(f"{base_url}/api/admin/business/settings",
+                        json={**old_settings, "product_costs": new_costs,
+                              "other_cost_per_order": "0.01",
+                              "reason": "QA_ITER5 payout backend costs"},
+                        headers=_origin(base_url), timeout=30)
+        assert put.status_code == 200
         customer = _mk_customer()
         _visit(customer, base_url, RESELLER_B["referral_code"])
         oid = _create_order(customer, base_url,
@@ -532,8 +558,7 @@ class TestIter5AdminModalsBackend:
         manifest["orders"].append(oid)
         _mark_state(admin, base_url, oid, "PAID", "DELIVERED", "FULFILLED", "QA_ITER5 payout setup")
         c = _get_commission(admin, base_url, RESELLER_B["reseller_id"], oid)
-        if c is None:
-            pytest.skip("Commission not created; skipping payout modal backend test")
+        assert c is not None, "Commission must be earned with scoped rule + configured costs"
         manifest["commissions"].append(c["id"])
         admin.patch(f"{base_url}/api/admin/business/commission/{c['id']}/status",
                     json={"status": "APPROVED", "reason": "QA_ITER5 approve"},
@@ -613,3 +638,12 @@ class TestIter5AdminModalsBackend:
         # Ledger updated: commission is PAID
         c_final = _run(mongo.commissions.find_one({"id": c["id"]}, {"_id": 0}))
         assert c_final["status"] == "PAID"
+
+        # Restore settings (asserted)
+        restore = {**old_settings,
+                   "product_costs": {k: str(v) for k, v in old_costs.items()},
+                   "other_cost_per_order": str(old_other) if old_other is not None else None,
+                   "reason": "QA_ITER5 restore payout backend costs"}
+        rr = admin.put(f"{base_url}/api/admin/business/settings", json=restore,
+                       headers=_origin(base_url), timeout=30)
+        assert rr.status_code == 200, f"restore failed: {rr.text}"

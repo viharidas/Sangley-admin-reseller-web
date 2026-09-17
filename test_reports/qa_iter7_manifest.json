@@ -1,0 +1,40 @@
+{
+  "orders": [
+    "SNG-A73C5EA9",
+    "SNG-B15570A6",
+    "SNG-F57CBC9E",
+    "SNG-C61913DA",
+    "SNG-CE0A33B9",
+    "SNG-8BCEEB3F",
+    "SNG-BA59CD16",
+    "SNG-615CE941",
+    "SNG-F436A35D",
+    "SNG-409A3078"
+  ],
+  "commissions": [
+    "f8dc603c-6853-434a-9b14-c10270b19e34",
+    "fb158647-ec1d-422d-8030-c706b490cb02",
+    "7effbd84-436d-4a2e-8072-8a5831e25f0d",
+    "266e1bff-1108-47ae-b330-7212962c2e94",
+    "f3377a8a-b45b-49e3-ba34-a0055bd1a692",
+    "9c25ed7b-12ba-4373-8cf3-972d3ee807f3",
+    "72fe4c29-905b-4794-8667-7e4f162982cf",
+    "1b6f1273-00e2-4368-a1c0-12695244bccf"
+  ],
+  "adjustments": [
+    "922d9fcf-8b0d-4246-9d1f-5ab9ce9b44dc",
+    "b92c061f-2c11-4372-85c3-1783a1c0c0c5"
+  ],
+  "rules": [
+    "c1fd3fc0-70c9-43a0-9149-9f5d278c447d",
+    "98e7f2e4-a67d-4320-a2da-0ad2cec1cb72",
+    "11e4d143-2cc8-4261-94b3-041f68c0099a",
+    "73b6d431-0e97-4047-8e5d-161aec011cba",
+    "224fd684-0aad-429a-943e-d3d7662aec5b",
+    "9cfc15a4-421c-4579-84b9-0b8187bda4b5",
+    "c8a9606a-e2d3-4d86-8f62-ba42539374de",
+    "08bd90ea-569b-4f9f-981e-b37102c95df0",
+    "dc022c97-ca6c-4127-86f4-54cecea43eb5",
+    "4253ee3c-9ed3-4411-ba10-383e21a0540e"
+  ]
+}

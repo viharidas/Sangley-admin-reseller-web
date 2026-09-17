@@ -1,0 +1,52 @@
+{
+  "summary": "Iteration-7: reliability-first phase closure. (a) Fixed metrics.py cumulative other-cost allocation is verified by NEW iter7 tests that invoke the REAL portal.metrics.sales() (via monkeypatched sale_query to isolate to a single order id) - not by copying formulas. All 5 iter7 cases PASS strictly: two-equal-line/1-paise other-cost reconciles exactly (sum(products.profit_minor) == snap.estimated_gross_profit_minor and no product profit is None), repeated product yields orders=1 with aggregated units, zero-rate rule + ledger adjustment 0->500 is reflected in report totals while snapshot stays immutable, historical missing-cost order returns profit_minor=None and cost_known=False through the real function, tiny other-cost 4-line order never produces negative product profit share. (b) iter6's copied-formula assertion was REPLACED with a real metrics.sales() invocation and now PASSES. (c) iter5 dead 'if False' block, default MongoDB URL/DB and hardcoded reseller password literals removed; iter5 payout test now creates its own scoped rule + costs and asserts commission earned instead of pytest.skip. (d) All iter5+iter6+iter7 = 19 tests PASS serially under -o addopts= (avoiding pytest.ini -n 2 that would race). (e) Cleanup script inspected, regex extended to include QA_ITER7 (was 4/5/6). Dry-run captured 397 records + baseline; --apply archived+removed 397 records; iter7-run added another 82 records archived+removed. Post-apply dry-run yields 0. Post-cleanup: audit_logs, admins, resellers, products, business_settings byte-identical counts; portal_files retained (soft-deleted qa_archived_at=True); QA orders/rules/marketing/sessions/notifications all gone; soft-deleted file IDs return 404. Post-cleanup APIs /api/products, admin orders/sales/commission/payouts/settings, B reseller login+sales all return 200 with reconciled totals. business_settings preserved: product_costs={}, other_cost_per_order=None, minimum_payout=0, repeat_attribution=False.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_portal_regression_iter7.py",
+    "/app/backend/tests/test_portal_regression_iter6.py",
+    "/app/backend/tests/test_portal_regression_iter5.py",
+    "/app/test_reports/pytest/iter7_backend.xml",
+    "/app/test_reports/pytest/iter5_6_7_backend.xml",
+    "/app/test_reports/cleanup_dryrun_before.json",
+    "/app/test_reports/cleanup_apply.json",
+    "/app/test_reports/cleanup_apply_iter7.json",
+    "/app/test_reports/cleanup_dryrun_after.json",
+    "/app/test_reports/db_baseline_before_cleanup.json",
+    "/app/test_reports/db_baseline_after_cleanup.json"
+  ],
+  "action_items": [
+    "None strictly required. Optional: consider extending /api/admin/business/orders to expose attribution_exclusion (currently tests still need direct Mongo reads for that field)."
+  ],
+  "critical_code_review_comments": [
+    "portal/metrics.py fix (Decimal + rounded + cumulative allocation with final-part residual absorber) is correct: verified strictly by real-function invocation for two-equal-line/1-paise, repeated-product, zero-rate+adjust and 4-line/3-paise cases; all reconcile exactly to snapshot.estimated_gross_profit_minor with no null product profits.",
+    "cleanup script preflight refuses any mixed-reference plan (unlabelled payouts, cross-collection references, unrelated marketing/support/reseller references to QA files). Applied path archives BEFORE deleting; portal_files kept with is_deleted=True + qa_archived_at stamp. Rerun idempotent to 0.",
+    "iter5 payout test previously used pytest.skip() when commission wasn't created; now creates its own scoped rule + configured costs and asserts commission earned (no skipping/conditional passing).",
+    "iter6 previously copied the old formula which artificially failed even after metrics.py fix; replaced with monkeypatched real invocation of portal.metrics.sales().",
+    "Application code untouched: only tests and cleanup regex updated."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_portal_regression_iter7.py (new)",
+    "/app/backend/tests/test_portal_regression_iter6.py (real metrics.sales invocation replaces copied formula)",
+    "/app/backend/tests/test_portal_regression_iter5.py (removed if-False dead code, default mongo URL/passwords, unconditional payout scoped rule, asserted restore)",
+    "/app/backend/scripts/cleanup_qa_reliability.py (regex extended from ITER[456] to ITER[4567])",
+    "/app/test_reports/iteration_7.json"
+  ],
+  "success_rate": {
+    "backend": "100% (19/19 pytest cases pass across iter5+iter6+iter7; 5/5 iter7 alone; 11/11 post-cleanup API checks)",
+    "frontend": "not tested (per review request scope)"
+  },
+  "test_credentials": "Admin from /app/memory/test_credentials.md (admin@sangley.in); Reseller B from /app/test_reports/portal_iter3_credentials.json. No new credentials created.",
+  "seed_data_creation": "iter7 tests created QA_ITER7-prefixed orders/commissions/adjustments/rules for reseller B: subsequently removed by cleanup --apply (82 records archived to qa_reliability_archive). qa_iter7_manifest.json written for traceability.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Application code is untouched. metrics.py fix is durably locked in by 5 iter7 tests + 1 iter6 test that exercise real portal.metrics.sales() via monkeypatched sale_query - do NOT copy formulas into tests. Cleanup script now covers ITER4/5/6/7. Run with: cd /app && set -a && . backend/.env && . frontend/.env && set +a && cd backend && python -m pytest tests/test_portal_regression_iter5.py tests/test_portal_regression_iter6.py tests/test_portal_regression_iter7.py -v -o addopts= (the -o addopts= is required to defeat repo's default -n 2 which loses conftest env vars). qa_reliability_archive holds 489 archived docs from all iterations for durable rollback if needed.",
+  "rca of the issue": "None outstanding. iter6 previous failure was the intentionally reproduced metrics.py:59 rounding drift (round-half-even losing 1 paise on two equal parts). Main-agent fix rewrote the loop to use Decimal + rounded() with cumulative allocation and residual absorber on the final part - verified through direct invocation of the actual function on multiple order shapes."
+}
