@@ -1,7 +1,8 @@
 from datetime import datetime,timezone,timedelta
+from decimal import Decimal
 from fastapi import HTTPException
 from db import db
-from .economics import minor,flatten
+from .economics import minor,flatten,rounded
 
 def period_query(days=None,start=None,end=None):
     q={}
@@ -44,8 +45,14 @@ async def sales(rid=None,channel=None,**period):
         else:profit+=p-((c['amount_minor']-snap['commission_minor']) if c and snap.get('commission_minor') is not None else 0)
         customer=customers.setdefault(order.get('customer_key',order['id']),{'name':order['name'],'orders':0,'sales_minor':0,'first_order':order['created_at'],'last_order':order['created_at']})
         customer['orders']+=1;customer['sales_minor']+=minor(order['subtotal']);customer['last_order']=order['created_at']
-        seen=set();allocated_commission=0
+        seen=set();allocated_commission=0;allocated_other=0;cumulative_sales=0
         for index,part in enumerate(parts):
+            cumulative_sales+=part['sales_minor']
+            other_share=0
+            if snap.get('other_cost_minor') is not None:
+                other_total=snap['other_cost_minor'] if index==len(parts)-1 else rounded(Decimal(snap['other_cost_minor'])*cumulative_sales/max(snap['sales_minor'],1))
+                other_share=other_total-allocated_other
+                allocated_other=other_total
             if c:
                 original=sum(x.get('commission_minor') or 0 for x in parts)
                 share=round(c['amount_minor']*(part.get('commission_minor') or 0)/original) if original else 0
@@ -56,7 +63,7 @@ async def sales(rid=None,channel=None,**period):
             product['units']+=part['units'];product['sales_minor']+=part['sales_minor'];product['commission_minor']+=actual_commission
             if part['product_id'] not in seen:product['orders']+=1;seen.add(part['product_id'])
             if part.get('cost_minor') is None or part.get('commission_minor') is None or snap.get('other_cost_minor') is None:product['cost_known']=False;product['profit_minor']=None
-            elif product['cost_known']:product['profit_minor']+=part['sales_minor']-part['cost_minor']-actual_commission-round(snap['other_cost_minor']*part['sales_minor']/max(snap['sales_minor'],1))
+            elif product['cost_known']:product['profit_minor']+=part['sales_minor']-part['cost_minor']-actual_commission-other_share
     values=list(customers.values())
     for c in values:c['repeat_customer']=c['orders']>1
     total=sum(minor(o['subtotal']) for o in orders)

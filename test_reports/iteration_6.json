@@ -1,0 +1,50 @@
+{
+  "summary": "Iteration-6 rewrote iter5's finance/finance-immutability/UI-payout coverage into deterministic reproductions. Metrics reconciliation reproduced the exact 1 paise drift predicted by main agent (sum(products.profit_minor)=26620 vs snapshot.estimated_gross_profit_minor=26619 on a two-line rule-scoped/costs-configured order created against reseller B). Historical snapshot immutability confirmed: snapshot captured pre-config equals snapshot post-config byte-for-byte and estimated_gross_profit_minor stays null. Tampered-cookie and same-normalized-mobile exclusions now verified through PAID+DELIVERED with commissions collection direct-read: no commission created. Payout UI modal exercised against seeded APPROVED payout PAY-F867F150-F: blank submit blocked, tooShort ref/notes/reason=True, future date bounded by max=today, missing checkbox blocks, valid full submission transitions to PAID and REVIEW action disappears. Order Manage UI exercised against fresh D2C enquiry SNG-152E6072: blank reason valueMissing, minLength=4 enforced on TEXTAREA (fix confirmed), payment_reference valueMissing when PAID, missing checkbox blocks, valid save persists (toast + status update visible).",
+  "backend_issues": {
+    "critical": [
+      {
+        "endpoint": "portal/metrics.py sales() line 59",
+        "issue": "Product-level other_cost allocation uses plain round() with no residual absorber. For a two-line order with equal sales and other_cost_minor=1 paise, both parts round to 0 paise, so sum(products.profit_minor) exceeds snapshot.estimated_gross_profit_minor by 1 paise (observed: 26620 vs 26619). Fix: allocate the last part as (other_cost_minor - allocated) mirroring the commission allocation pattern already used two lines above.",
+        "priority": "HIGH"
+      }
+    ],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_portal_regression_iter6.py",
+    "/app/test_reports/pytest/iter6_backend.xml",
+    "/app/test_reports/qa_iter6_manifest.json"
+  ],
+  "action_items": [
+    "Fix portal/metrics.py:59: replace round(snap['other_cost_minor']*part['sales_minor']/max(snap['sales_minor'],1)) with a running-allocation pattern so the final part absorbs the paise residual (mirror allocated_commission pattern). Add durable assertion in existing snapshot tests: sum(part_profit) == snap['estimated_gross_profit_minor'].",
+    "Iteration-6 payout PAY-F867F150-F is now PAID and terminal; safe to leave. Rules 14d0431b-eb1a-44d1-8326-e7c479d552da and 90136c45-8964-45e8-a5c2-7bf4ad8702bb were auto-deactivated by test teardown but new versions still exist as superseded; consider a cleanup pass. Business_settings restored after each test (asserted).",
+    "Optional: `/api/admin/business/orders` list still omits attribution_exclusion (only commission_exclusion exposed); consider surfacing it so tests do not need direct Mongo reads."
+  ],
+  "critical_code_review_comments": [
+    "portal/metrics.py:59 rounding drift is a real durable bug now reproduced deterministically at the order-snapshot level, independent of aggregated reports. Recommended fix pattern (as inline in commission allocation on line 51-53): track allocated_other, and on last part assign other_share = snap['other_cost_minor'] - allocated_other. Same pattern already exists for commission and should be lifted for other_cost.",
+    "portal/UI.jsx Field now forwards minLength to <textarea> (fix confirmed in browser: reason textarea reports minLength=4 and validity.tooShort=True for 'ab').",
+    "portal/Finance.jsx PayoutEditor correctly gates minLength on notes only when status===PAID and always on reason; verified via browser validity API.",
+    "financial guard rails (>=4 notes, >=3 reference, non-future date, actual_payment_confirmed, PAID immutability) already covered by iter5 backend tests; iter6 additionally exercised them through the real UI modal.",
+    "Tests still perform some hardcoded MongoDB reads for attribution_exclusion / customer_key because these are not exposed in the public admin API. Long-term, expose them for cleaner black-box testing."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_portal_regression_iter6.py",
+    "/app/test_reports/qa_iter6_manifest.json",
+    "/app/test_reports/iteration_6.json"
+  ],
+  "success_rate": {
+    "backend": "80% (4/5 pytest cases passed; 1 FAILED intentionally reproducing metrics.py:59 bug)",
+    "frontend": "100% (payout PAID happy path, order Manage happy path, and every validation branch exercised in-browser)"
+  },
+  "test_credentials": "Admin from /app/memory/test_credentials.md; reseller B profile derived from /app/test_reports/portal_iter3_credentials.json + iter5 defaults for reseller_id/referral_code. No new credentials created.",
+  "seed_data_creation": "QA_ITER6 orders: SNG-AD2CC0A8 (multi-line reconciliation), SNG-F8E02198 (historical immutability), SNG-3DA33F89 (payout fixture PAID), SNG-9030264A (tampered-cookie D2C), SNG-07C9370A (same-mobile self-referral), SNG-152E6072 (UI Manage test). Commissions/payouts recorded in /app/test_reports/qa_iter6_manifest.json (cumulative merge with prior manifest content). Two scoped rules created and superseded (deactivated) during teardown. business_settings snapshot/restore asserted successful.",
+  "retest_needed": true,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "iter6 metrics test FAILS by exactly 1 paise until portal/metrics.py:59 is fixed. Once fixed, re-run backend/tests/test_portal_regression_iter6.py; all 5 should pass. Payout PAY-F867F150-F is now PAID, so the UI test must seed a new APPROVED payout on B before re-running the browser flow. Order SNG-152E6072 is now PAID+SHIPPED+CONFIRMED. If re-running order UI, create a fresh enquiry. Runtime env for pytest: cd /app && set -a && . backend/.env && . frontend/.env && set +a && python -m pytest backend/tests/test_portal_regression_iter6.py -v -o addopts= (the -o addopts= is required to defeat the repo's default -n auto which loses the env vars needed by conftest).",
+  "rca of the issue": "portal/metrics.py sales() distributes snap.other_cost_minor across parts using round() proportionally to part.sales_minor. Python's round() uses banker's rounding, and for two equally-priced parts with other_cost_minor=1 paise, round(0.5)=0 for both, leaving the 1 paise unallocated. The aggregated snapshot.estimated_gross_profit_minor computed in economics.snapshot() correctly deducts all 1 paise. Result: sum(products.profit_minor) - snap.estimated_gross_profit_minor = +1 paise. Reproduced with two garlic+peri-peri lines under reseller B, product_costs=1.00 each, other_cost_per_order=0.01, PERCENTAGE 10% rule scoped to B & both products (commission 2980 minor). Fix: track allocated_other in the loop and use allocated_other-absorbing residual on the final part, exactly like the existing allocated_commission pattern in the same function."
+}
