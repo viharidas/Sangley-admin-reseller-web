@@ -2,6 +2,8 @@ from fastapi import APIRouter, HTTPException, Request
 from pymongo.errors import DuplicateKeyError
 from db import db, uid, now
 from models import Product, Quote, Order, Lead, Event, Record
+from portal.referrals import order_context,track_referral_event
+from portal.audit import notify
 
 router=APIRouter(prefix='/api')
 
@@ -52,16 +54,18 @@ async def calculate(body:Quote):
 async def quote(body:Quote): return await calculate(body)
 
 @router.post('/orders',response_model=Record)
-async def order(body:Order):
+async def order(body:Order,request:Request):
     if not body.consent: raise HTTPException(400,'Please consent to being contacted about your enquiry')
     previous=await db.orders.find_one({'request_id':body.request_id},{'_id':0})
     if previous: return {'id':previous['id'],'subtotal':previous['subtotal'],'status':previous['status'],'message':'Your order enquiry has been received. No payment has been taken.'}
     priced=await calculate(body)
-    doc={'id':'SNG-'+uid()[:8].upper(),**body.model_dump(exclude={'items'}),**priced,'status':'ENQUIRY','payment_status':'NOT_COLLECTED','created_at':now()}
+    context=await order_context(request,body,priced)
+    doc={'id':'SNG-'+uid()[:8].upper(),**body.model_dump(exclude={'items'}),**priced,**context,'status':'ENQUIRY','payment_status':'NOT_COLLECTED','created_at':now()}
     try: await db.orders.insert_one(doc.copy())
     except DuplicateKeyError:
         previous=await db.orders.find_one({'request_id':body.request_id},{'_id':0})
         return {'id':previous['id'],'subtotal':previous['subtotal'],'status':previous['status'],'message':'Your order enquiry has been received. No payment has been taken.'}
+    if doc.get('reseller_id'):await notify(doc['reseller_id'],'NEW_ORDER','New order enquiry',f'An enquiry was attributed to your link: {doc["id"]}. It is not a paid sale yet.','/reseller/orders/'+doc['id'])
     return {'id':doc['id'],'subtotal':doc['subtotal'],'status':doc['status'],'message':'Your order enquiry has been received. No payment has been taken.'}
 
 @router.post('/leads',response_model=Record)
@@ -72,8 +76,9 @@ async def lead(body:Lead):
     return {'id':doc['id'],'message':'You’re on the list. Our team will get in touch to discuss your next step.'}
 
 @router.post('/events')
-async def event(body:Event):
+async def event(body:Event,request:Request):
     allowed={'page_view','product_view','add_to_cart','checkout','purchase','order_enquiry','bundle_builder_started','bundle_completed','reseller_cta_click','whatsapp_click','reseller_lead','consumer_lead','starter_kit_selection','search'}
     if body.name not in allowed: raise HTTPException(400,'Unknown event')
     await db.events.insert_one({'id':uid(),**body.model_dump(),'created_at':now()})
+    await track_referral_event(request,body.name,body.properties)
     return {'ok':True}

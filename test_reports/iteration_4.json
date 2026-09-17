@@ -1,0 +1,42 @@
+{
+  "summary": "Executed iteration-4 backend+frontend verification on production URL for auth lockout, managed file storage/privacy, deep finance branches, referral channel classification, fixed-per-unit rule versioning, tablet menu visibility/toggle, and horizontal overflow at 360/390/430/768.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_portal_regression_iter4.py",
+    "/app/backend/tests/test_backend_regression.py",
+    "/app/test_reports/pytest/iter4_backend.xml",
+    "/app/test_reports/pytest/iter4_lockout_admin.xml"
+  ],
+  "action_items": [
+    "Complete remaining unexecuted referral edge cases from request: tampered referral cookie behavior, A->B explicit FIRST preservation with two approved codes, repeat paid-customer exclusion assertions, and same-normalized mobile exclusion assertions with direct order-field checks.",
+    "Complete admin UI modal checks for order manage and payout confirm required-field flows using deterministic non-PAID/non-FAILED QA rows (current run had no manageable rows, so those UI checks were skipped).",
+    "Run one additional profit/cost snapshot-focused regression for missing historical cost inputs and product-performance ledger allocation across multi-line orders to fully close requested financial depth.",
+    "Main agent should clean up QA_ITER4-created business records/rules after validation to avoid residual test data in production preview."
+  ],
+  "critical_code_review_comments": [
+    "Auth brute-force lockout behavior is now account-keyed and validated at API level for both admin and reseller login paths (6th invalid attempt returned 429).",
+    "File handling enforces robust server-side validation (MIME/content mismatch, unsupported type, oversize rejection), and ownership controls correctly block cross-reseller support-file/avatars access.",
+    "Financial state machine branches validated: reserved commission adjustment blocked, payout FAILED releases reservation, reservation reusable, paid-order return creates exactly one ORDER_REVERSAL negative adjustment without duplication on repeated return updates."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_portal_regression_iter4.py",
+    "/app/test_reports/iteration_4.json"
+  ],
+  "success_rate": {
+    "backend": "100% (6/6 executed tests passed)",
+    "frontend": "90% (core requested responsive/menu checks passed; some admin modal checks skipped due data state)"
+  },
+  "seed_data_creation": "Created QA_ITER4 test records via public APIs: referred orders, commissions, payout attempts/updates, commission adjustments/reversal, marketing/support/avatar uploaded files, and commission-rule versions.",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Iteration-4 regression file exists at /app/backend/tests/test_portal_regression_iter4.py and passes against production URL. Tablet menu/overflow checks passed via Playwright artifacts_iter4. Admin order/payout modal validations were partially skipped because no manageable UI rows were available at runtime.",
+  "rca of the issue": "No product-code defect was reproduced in this run. Initial test failures were due test-input issues (invalid short address and invalid PNG bytes in test payload), corrected within test scripts only."
+}

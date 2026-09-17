@@ -6,6 +6,8 @@ from auth import admin
 from models import Product, Record, StatusUpdate
 from content_models import SiteContent
 from pydantic import ValidationError
+from portal.audit import audit
+from portal.financial import synchronize_order,ledger_lock
 
 router=APIRouter(prefix='/api/admin',dependencies=[Depends(admin)])
 LEAD_STATUSES=['NEW LEAD','CONTACTED','INTERESTED','ONBOARDING','ACTIVE','FIRST ORDER','REPEAT ORDER','INACTIVE']
@@ -16,21 +18,25 @@ async def overview():
     return {'products':await db.products.count_documents({}),'orders':await db.orders.count_documents({}),'reseller_leads':await db.leads.count_documents({'type':'reseller'}),'consumer_leads':await db.leads.count_documents({'type':{'$ne':'reseller'}}),'events':await db.events.count_documents({}),'new_leads':await db.leads.count_documents({'status':'NEW LEAD'})}
 
 @router.put('/products/{pid}',response_model=Product)
-async def save_product(pid:str,body:Product):
+async def save_product(pid:str,body:Product,user=Depends(admin)):
     if pid!=body.id: raise HTTPException(400,'Product ID cannot be changed')
     if not math.isfinite(body.price) or (body.mrp is not None and not math.isfinite(body.mrp)): raise HTTPException(400,'Price must be finite')
+    old=await db.products.find_one({'id':pid},{'_id':0})
     try: await db.products.update_one({'id':pid},{'$set':body.model_dump()},upsert=True)
     except DuplicateKeyError: raise HTTPException(400,'That product URL is already in use')
+    await audit(user,'PRODUCT_PRICE_OR_CONTENT_CHANGED','products',pid,old,body.model_dump(),'Catalogue editor save')
     return body
 
 @router.delete('/products/{pid}')
-async def delete_product(pid:str):
+async def delete_product(pid:str,user=Depends(admin)):
+    old=await db.products.find_one({'id':pid},{'_id':0})
     result=await db.products.delete_one({'id':pid})
     if not result.deleted_count: raise HTTPException(404,'Product not found')
+    await audit(user,'PRODUCT_DELETED','products',pid,old,None,'Catalogue editor deletion; order snapshots preserved')
     return {'ok':True}
 
 @router.put('/content',response_model=Record)
-async def save_content(body:dict):
+async def save_content(body:dict,user=Depends(admin)):
     current=await db.content.find_one({'id':'site'},{'_id':0})
     for field in body:
         if field not in current: raise HTTPException(400,f'Unknown content field: {field}')
@@ -60,6 +66,7 @@ async def save_content(body:dict):
         if phone and (not phone.isdigit() or not 10<=len(phone)<=15): raise ValueError('WhatsApp requires 10–15 digits including country code, without +')
     except (KeyError,TypeError,ValueError) as e: raise HTTPException(400,str(e))
     await db.content.update_one({'id':'site'},{'$set':merged})
+    await audit(user,'WEBSITE_CONTENT_OR_BUNDLE_CHANGED','content','site',current,merged,'Business content editor save')
     return merged
 
 @router.get('/leads',response_model=list[Record])
@@ -76,11 +83,17 @@ async def update_lead(lid:str,body:StatusUpdate):
 async def orders(): return await db.orders.find({},{'_id':0}).sort('created_at',-1).to_list(2000)
 
 @router.patch('/orders/{oid}',response_model=Record)
-async def update_order(oid:str,body:StatusUpdate):
+async def update_order(oid:str,body:StatusUpdate,user=Depends(admin)):
     if body.status not in ORDER_STATUSES: raise HTTPException(400,'Invalid order status')
-    result=await db.orders.update_one({'id':oid},{'$set':{'status':body.status,'updated_at':now()}})
-    if not result.matched_count: raise HTTPException(404,'Order not found')
-    return await db.orders.find_one({'id':oid},{'_id':0})
+    old=await db.orders.find_one({'id':oid},{'_id':0})
+    if not old:raise HTTPException(404,'Order not found')
+    async with ledger_lock(old.get('reseller_id'),skip=not bool(old.get('reseller_id'))):
+        aid=await audit(user,'ORDER_STATUS_CHANGED','orders',oid,old,{'status':body.status},'Existing order management update','PENDING')
+        await db.orders.update_one({'id':oid},{'$set':{'status':body.status,'updated_at':now()}})
+        updated=await db.orders.find_one({'id':oid},{'_id':0})
+        await synchronize_order(updated,user,lock_held=True)
+        await db.audit_logs.update_one({'id':aid},{'$set':{'outcome':'COMPLETED'}})
+    return updated
 
 @router.get('/analytics')
 async def analytics():

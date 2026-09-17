@@ -10,11 +10,21 @@ from seed import seed_content
 from auth import router as auth_router, seed_admin
 from commerce import router as commerce_router
 from admin_routes import router as admin_router
+from portal.settings import seed_portal
+from portal.financial import reconcile_paid_payouts
+from portal.auth_routes import router as reseller_auth_router
+from portal.reseller_routes import router as reseller_router
+from portal.admin_routes import router as business_router
+from portal.finance_routes import router as finance_router
+from portal.referrals import router as referral_router
+from portal.files import router as files_router
 
 @asynccontextmanager
 async def lifespan(app):
     await seed_admin()
     await seed_content()
+    await seed_portal()
+    await reconcile_paid_payouts()
     yield
     client.close()
 
@@ -23,3 +33,9 @@ app.add_middleware(CORSMiddleware,allow_origins=[value.strip().rstrip('/') for v
 app.include_router(auth_router)
 app.include_router(commerce_router)
 app.include_router(admin_router)
+app.include_router(reseller_auth_router)
+app.include_router(reseller_router)
+app.include_router(business_router)
+app.include_router(finance_router)
+app.include_router(referral_router)
+app.include_router(files_router)

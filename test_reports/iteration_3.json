@@ -1,0 +1,63 @@
+{
+  "summary": "Executed backend + frontend regression for reseller portal critical path: application->approval->referral->order->commission->payout, plus auth capability messaging and responsive checks.",
+  "backend_issues": {
+    "critical": [
+      {
+        "endpoint": "/api/auth/login",
+        "issue": "Brute-force lockout did not trigger after 6 invalid attempts in regression suite (expected 429, got 401).",
+        "priority": "HIGH"
+      }
+    ],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "Portal sidebar at tablet 768",
+        "issue": "`open-portal-menu` exists but is not visible/clickable in automation at 768; mobile 390 toggle works.",
+        "selector": "[data-testid='open-portal-menu']",
+        "priority": "MEDIUM"
+      }
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {
+        "screen": "Reseller tablet layout (768x1024)",
+        "issues": [
+          "Sidebar appears expanded; open/close interaction expected by test plan was not consistently available."
+        ]
+      }
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_portal_regression_iter3.py",
+    "/app/test_reports/pytest/iteration3_backend.xml",
+    "/app/test_reports/pytest/iteration3_all_backend.xml",
+    "/app/test_reports/portal_iter3_credentials.json"
+  ],
+  "action_items": [
+    "Investigate auth lockout keying (`request.client.host`) behind ingress/proxy so repeated bad logins reliably hit 429 after threshold.",
+    "Confirm desired tablet sidebar UX at 768 (always expanded vs toggle behavior) and align automation/data-testid behavior.",
+    "Retest unexecuted deep scenarios from request (marketing durable upload validations, payout FAILED reservation release, cancellation/refund reversal adjustments, file-IDOR by direct file fetch)."
+  ],
+  "critical_code_review_comments": [
+    "Lockout logic depends on client host in throttle key; proxy/gateway host variability can weaken brute-force protection behavior.",
+    "Financial chain assertions passed: no ledger before payment; snapshot preserved 10% (1490 paise) after rule superseded to 12%; delivery gate enforced before commission approval; payout PAID required actual_payment_confirmed + reference + non-future date.",
+    "Sensitive payout details remained masked in reseller profile responses and privileged patch fields were rejected by validation."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_portal_regression_iter3.py",
+    "/app/scripts/extract_portal_iter3_credentials.py",
+    "/app/memory/test_credentials.md",
+    "/app/test_reports/iteration_3.json"
+  ],
+  "success_rate": {
+    "backend": "95% (19/20)",
+    "frontend": "88%"
+  },
+  "seed_data_creation": "Created QA fixtures: reseller A qa_portal_a_98204811@example.com, reseller B qa_portal_b_56c6f848@example.com; reseller A referral/order/commission/payout chain with latest order SNG-0FB6DC82, commission 4f606ce0-7d9a-4c3d-9979-a35461b48647, payout PAY-5A007E05-D.",
+  "retest_needed": true,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Core portal E2E business flow works on production URL with real DB persistence. Use /app/test_reports/portal_iter3_credentials.json for latest QA account + fixture IDs. One auth lockout regression remains reproducible in full suite.",
+  "rca of the issue": "Repro (lockout): run repeated invalid POST /api/auth/login attempts; expected terminal 429 per policy, observed terminal 401 in full regression run. Probable cause: throttle key includes `request.client.host`, which may vary behind ingress/proxy pathing, preventing stable attempt aggregation."
+}

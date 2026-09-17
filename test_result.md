@@ -101,3 +101,34 @@
 #====================================================================================================
 # Testing Data - Main Agent and testing sub agent both should log testing data below this section
 #====================================================================================================
+
+## Reliability closure — iteration 5
+user_problem_statement: "User approved the selected reliability-first plan: complete iteration-4 referral, finance and admin modal checks; fix confirmed defects; clean only identified QA_ITER4 records."
+backend:
+  - task: "Referral exclusions and historical cost/ledger integrity"
+    implemented: true
+    working: "NA"
+    file: "backend/portal/referrals.py; backend/portal/metrics.py; backend/portal/financial.py"
+    priority: high
+    needs_retesting: true
+    status_history:
+      - agent: main
+        working: "NA"
+        comment: "No application changes yet. Reproduce missing test cases before fixes; inspect rounding/reconciliation across multi-line orders."
+frontend:
+  - task: "Admin order and payout required-field modals"
+    implemented: true
+    working: "NA"
+    file: "frontend/src/portal/Orders.jsx; frontend/src/portal/Finance.jsx; frontend/src/portal/UI.jsx"
+    priority: high
+    needs_retesting: true
+    status_history:
+      - agent: main
+        working: "NA"
+        comment: "Use deterministic QA rows rather than skipping paid/failed-only tables."
+test_plan:
+  current_focus: [referral edge cases, profit reconciliation, admin order modal, admin payout modal]
+  test_all: false
+agent_communication:
+  - agent: main
+    message: "Read iteration_4.json. Use existing credentials; B is APPROVED with reseller_id 357245f0-1937-453c-9bfd-2168cb3361d2 and referral_code SNG0E106BCFAF69 (old credentials JSON lacks these). Do not create credentials or modify product code. Prefix all test data QA_ITER5; preserve a manifest of every created ID for cleanup and restore settings/rules changed by testing."

@@ -5,10 +5,11 @@ from datetime import datetime, timezone, timedelta
 from fastapi import APIRouter, HTTPException, Request, Response, Depends
 from db import db, uid, now
 from models import Login
+from pymongo import ReturnDocument
 
 router = APIRouter(prefix='/api/auth')
 def verify(plain, hashed):
-    return bcrypt.checkpw(plain.encode(), hashed.encode())
+    return len(plain.encode())<=72 and bcrypt.checkpw(plain.encode(), hashed.encode())
 
 async def seed_admin():
     email, password = os.environ['ADMIN_EMAIL'].lower(), os.environ['ADMIN_PASSWORD']
@@ -58,13 +59,17 @@ async def admin(request: Request):
 async def login(body:Login,request:Request,response:Response):
     check_origin(request)
     email=str(body.email).lower().strip()
-    identifier=f'{request.client.host}:{email}'
+    identifier=f'admin-login:{email}'
     attempt=await db.login_attempts.find_one({'identifier':identifier},{'_id':0})
+    if attempt and attempt['expires_at'].replace(tzinfo=timezone.utc)<=datetime.now(timezone.utc):
+        await db.login_attempts.delete_one({'identifier':identifier,'expires_at':attempt['expires_at']})
+        attempt=None
     if attempt and attempt.get('count',0)>=5 and attempt['expires_at'].replace(tzinfo=timezone.utc)>datetime.now(timezone.utc):
         raise HTTPException(429,'Too many attempts. Please wait 15 minutes.')
     user=await db.users.find_one({'email':email,'role':'admin'},{'_id':0})
     if not user or not verify(body.password,user['password_hash']):
-        await db.login_attempts.update_one({'identifier':identifier},{'$inc':{'count':1},'$set':{'expires_at':datetime.now(timezone.utc)+timedelta(minutes=15)}},upsert=True)
+        attempt=await db.login_attempts.find_one_and_update({'identifier':identifier},{'$inc':{'count':1},'$setOnInsert':{'expires_at':datetime.now(timezone.utc)+timedelta(minutes=15)}},upsert=True,return_document=ReturnDocument.AFTER,projection={'_id':0})
+        if attempt['count']>5:raise HTTPException(429,'Too many attempts. Please wait 15 minutes.')
         raise HTTPException(401,'Email or password is incorrect')
     await db.login_attempts.delete_one({'identifier':identifier})
     cookies(response,user)
