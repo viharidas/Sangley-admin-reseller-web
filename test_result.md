@@ -132,3 +132,7 @@ test_plan:
 agent_communication:
   - agent: main
     message: "Read iteration_4.json. Use existing credentials; B is APPROVED with reseller_id 357245f0-1937-453c-9bfd-2168cb3361d2 and referral_code SNG0E106BCFAF69 (old credentials JSON lacks these). Do not create credentials or modify product code. Prefix all test data QA_ITER5; preserve a manifest of every created ID for cleanup and restore settings/rules changed by testing."
+
+  - agent: main
+    message: "Iteration 5 review: claimed finance reconciliation coverage was conditional and NOT executed with configured rules; payout browser test skipped again. Require deterministic fixtures and unconditional assertions before closing. Fixed Field textarea minLength and payout reference/notes minlength. Next call must reproduce known-cost 1-paise multi-line totals BEFORE financial code changes, strengthen regressions, and exercise nonterminal payout in browser. No skips due to missing fixtures."
+
